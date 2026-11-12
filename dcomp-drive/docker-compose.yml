@@ -9,6 +9,9 @@ services:
     environment:
       ZOO_MY_ID: 1
       ZOO_SERVERS: server.1=0.0.0.0:2888:3888;2181
+    volumes:
+      - ./zoo:/data
+      - ./zoo:/datalog
 
   postgres:
     image: postgres:16
@@ -26,6 +29,15 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+  
+  zookeeper_app:
+    build: .
+    container_name: zookeeper-kazoo
+    command: python -m src.zookeeper.zookeeperkazoo
+    depends_on:
+      - zookeeper
+    environment:
+      ZOOKEEPER_HOST: "zookeeper:2181"
 
   controller:
     build: .
