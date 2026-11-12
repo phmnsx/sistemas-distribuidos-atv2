@@ -1,15 +1,20 @@
 version: '3.8'
 
 services:
+  #todo: fazer 3 zookeepers
   zookeeper:
     image: zookeeper:3.8
-    container_name: dfs-zookeeper
+    container_name: zookeeper1
     ports:
       - "2181:2181"
     environment:
       ZOO_MY_ID: 1
       ZOO_SERVERS: server.1=0.0.0.0:2888:3888;2181
+    volumes:
+      - ./zoo/data:/data
+      - ./zoo/datalog:/datalog
 
+  #DB para os metadados
   postgres:
     image: postgres:16
     container_name: dfs-postgres
@@ -37,7 +42,7 @@ services:
       zookeeper:
         condition: service_started
     environment:
-      ZK_HOST: zookeeper:2181
+      ZK_HOSTS: zookeeper:2181
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: dfs_metadata
