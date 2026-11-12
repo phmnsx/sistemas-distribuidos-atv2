@@ -1,0 +1,5 @@
+pyzmq==26.0.0
+kazoo==2.10.0
+psycopg2-binary==2.9.9
+cryptography==42.0.5
+pytest==8.1.1

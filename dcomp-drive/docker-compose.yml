@@ -1,0 +1,76 @@
+version: '3.8'
+
+services:
+  zookeeper:
+    image: zookeeper:3.8
+    container_name: dfs-zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOO_MY_ID: 1
+      ZOO_SERVERS: server.1=0.0.0.0:2888:3888;2181
+
+  postgres:
+    image: postgres:16
+    container_name: dfs-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: dfs_metadata
+      POSTGRES_USER: postgre
+      POSTGRES_PASSWORD: postgre
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgre -d dfs_metadata"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  controller:
+    build: .
+    container_name: dfs-controller
+    command: python -m src.controller.server
+    depends_on:
+      postgres:
+        condition: service_healthy
+      zookeeper:
+        condition: service_started
+    environment:
+      ZK_HOST: zookeeper:2181
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: dfs_metadata
+      DB_USER: postgre
+      DB_PASSWORD: postgre
+    ports:
+      - "5000:5000"
+
+  storage-node-1:
+    build: .
+    container_name: dfs-storage-1
+    command: python -m src.storage.node --id node1 --host storage-node-1 --port 5555 --storage-path /data_blocks
+    depends_on:
+      - zookeeper
+    environment:
+      ZK_HOST: zookeeper:2181
+    volumes:
+      - ./data/node1:/data_blocks
+    ports:
+      - "5555:5555"
+
+  storage-node-2:
+    build: .
+    container_name: dfs-storage-2
+    command: python -m src.storage.node --id node2 --host storage-node-2 --port 5556 --storage-path /data_blocks
+    depends_on:
+      - zookeeper
+    environment:
+      ZK_HOST: zookeeper:2181
+    volumes:
+      - ./data/node2:/data_blocks
+    ports:
+      - "5556:5556"
+
+volumes:
+  pg_data:
