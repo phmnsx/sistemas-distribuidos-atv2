@@ -1,0 +1,1 @@
+Este é o meu primeiro arquivo no DFS com criptografia e logs estruturados.
