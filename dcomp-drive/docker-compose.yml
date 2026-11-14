@@ -58,7 +58,7 @@ services:
     depends_on:
       - zookeeper
     environment:
-      ZK_HOST: zookeeper:2181
+      ZK_HOSTS: zookeeper:2181
     volumes:
       - ./data/node1:/data_blocks
     ports:
@@ -71,7 +71,7 @@ services:
     depends_on:
       - zookeeper
     environment:
-      ZK_HOST: zookeeper:2181
+      ZK_HOSTS: zookeeper:2181
     volumes:
       - ./data/node2:/data_blocks
     ports:
