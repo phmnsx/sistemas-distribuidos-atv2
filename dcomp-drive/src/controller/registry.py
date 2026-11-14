@@ -92,8 +92,24 @@ class NodeRegistry:
         data, _ = result
 
         try:
-            disks = json.loads(data.decode("utf-8"))
-        except (AttributeError, UnicodeDecodeError, json.JSONDecodeError):
+            registration = json.loads(data.decode("utf-8"))
+
+            if isinstance(registration, dict):
+                disks = registration.get("disks")
+                addr = registration.get("addr")
+                host = registration.get("host")
+            elif isinstance(registration, list):
+                # Mantém compatibilidade com registros antigos.
+                disks = registration
+                addr = None
+                host = None
+            else:
+                raise ValueError("Formato de registro inválido")
+
+            if not isinstance(disks, list):
+                raise ValueError("A lista de discos é inválida")
+
+        except (AttributeError, UnicodeDecodeError, json.JSONDecodeError, ValueError):
             logging.exception("Dados inválidos para o nó %s", node_id)
             return
 
@@ -107,8 +123,8 @@ class NodeRegistry:
                 disks=disks,
                 last_seen=time.monotonic(),
                 state="ALIVE",
-                addr=previous.addr if previous else None,
-                host=previous.host if previous else None,
+                addr=addr or (previous.addr if previous else None),
+                host=host or (previous.host if previous else None),
                 draining=draining,
             )
 

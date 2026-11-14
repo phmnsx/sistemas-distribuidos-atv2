@@ -5,13 +5,18 @@ import threading
 import time
 from kazoo.client import ChildrenWatch, Election, KazooClient, KazooState
 
+""" Mantém uma única conexão ZooKeeper compartilhada pelo wrapper
+Ela começa como None e será criada na primeira chamada de _get_zk() """
+
+_zk: KazooClient | None = None
+
 _path_list = [ "/storage/nodes",
               "/files",
               "/locks",
               "/config",
               "/election/controller",
               "/locks/dirs",
-              "locks/files",
+              "/locks/files",
               "/locks/alloc/",
               "/locks/drain/"
               ]
@@ -20,6 +25,11 @@ def _get_zk() -> KazooClient:
     global _zk
     if _zk is None:
         hosts = os.getenv("ZK_HOSTS")
+
+        # impede a criação de uma conexão sem endereço configurado
+        if not hosts:
+            raise RuntimeError("A variável de ambiente ZK_HOSTS não foi definida.")
+
         _zk = KazooClient(hosts)
         _zk.add_listener(_handle_state)
         _zk.start()
@@ -35,26 +45,38 @@ def init():
         zk.ensure_path(path)
     logging.info("Init completo")
 
-def register_storage(name, disks, available):
+def register_storage(name, disks, available, addr, host=None):
     """
-    Registra um nó de armazenamento
+    Registra um nó de armazenamento no ZooKeeper.
 
-    name : string, Nome do node
-    capacity : Capacidade de cada disco do node
-    available : Capacidade restande de cada disco do node
+    name: identificador do nó.
+    disks: capacidade total de cada disco.
+    available: espaço disponível em cada disco.
+    addr: endereço RPC do nó.
+    host: identificação da máquina onde o nó está executando.
     """
-    data = []
-    for index, (disk, disk_available) in enumerate(zip(disks, available), start=1):
-        data.append({"disk": index, "total": disk, "available": disk_available})
+    if not name or not addr:
+        raise ValueError("Nome e endereço do nó são obrigatórios.")
+
+    data = {
+        "addr": addr,
+        "host": host or name,
+        "disks": [
+            {"disk": index, "total": disk, "available": disk_available}
+            for index, (disk, disk_available) in enumerate(
+                zip(disks, available), start=1
+            )
+        ],
+    }
 
     path = f"/storage/nodes/{name}"
-
     zk = _get_zk()
+
     if zk.exists(path):
         zk.delete(path)
 
     zk.create(path, json.dumps(data).encode("utf-8"), ephemeral=True)
-    logging.info("Node criado")
+    logging.info("Nó %s registrado no ZooKeeper", name)
 
 def get_node(path):
     """
@@ -67,7 +89,7 @@ def get_node(path):
     else:
         return None
 
-def set_storage_watch(remove_func=function, add_func=function):
+def set_storage_watch(remove_func=None, add_func=None):
     """
     Recebe uma função de "remoção" e uma de "adição", executa tal função para cada nó (func(child_id)) deletado ou adicionado em /storage/nodes
     Retorna o watcher.
@@ -80,7 +102,8 @@ def set_storage_watch(remove_func=function, add_func=function):
         if children is None:
             logging.warning("Nenhuma criança encontrada, talvez nó pai foi removido?")
 
-        current = set(children)
+        # childrenWatch pode fornecer None entao tratamos como lista vazia
+        current = set(children or [])
         removed = previous - current
         added = current - previous
 
@@ -89,7 +112,7 @@ def set_storage_watch(remove_func=function, add_func=function):
             if remove_func:
                 remove_func(node_id)
 
-        for node_id in removed:
+        for node_id in added:
             logging.info(f"Criança {node_id} adicionada")
             if add_func:
                 add_func(node_id)
@@ -97,7 +120,7 @@ def set_storage_watch(remove_func=function, add_func=function):
         previous = current
     return ChildrenWatch(zk, "/storage/nodes", _watcher)
 
-def election_watch(func=function):
+def election_watch(func=None):
     """
     Observa a eleição e chama func(lider_id) sempre que o lider mudar
     """
@@ -109,14 +132,16 @@ def election_watch(func=function):
         if not children:
             logging.warning("Nenhum candidato a eleicao")
             if previous is not None:
-                func(None)
+                if func:
+                    func(None)
                 previous = None
             return
 
         current = children[0]
         if current != previous:
             logging.info(f"Novo lider, Antes: {previous}, Agora: {current}")
-            func(current)
+            if func:
+                func(current)
             previous = current
 
     return ChildrenWatch(zk, "/election/controller", _watch)
@@ -159,7 +184,7 @@ def lock_dir(dir:str):
     Lock para editar diretório
     Formato: lock_dir("/dir1") ou lock_dir("/dir1/dir2")
     """
-    name = dir.stip("/").replace("/","__")
+    name = dir.strip("/").replace("/","__")
     return _get_zk().Lock(f"/locks/dirs/{name}", _callerID())
 
 def lock_alloc():
