@@ -19,7 +19,7 @@ services:
     image: postgres:16
     container_name: dfs-postgres
     ports:
-      - "5432:5432"
+      - "5433:5432" # nao tava conseguindo com 5432:5432
     environment:
       POSTGRES_DB: dfs_metadata
       POSTGRES_USER: postgre
