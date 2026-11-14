@@ -54,7 +54,7 @@ services:
   storage-node-1:
     build: .
     container_name: dfs-storage-1
-    command: python -m src.storage.node --id node1 --host storage-node-1 --port 5555 --storage-path /data_blocks
+    command: python -m src.storage.integrity_node --id node1 --host storage-node-1 --port 5555 --storage-path /data_blocks
     depends_on:
       - zookeeper
     environment:
@@ -67,7 +67,7 @@ services:
   storage-node-2:
     build: .
     container_name: dfs-storage-2
-    command: python -m src.storage.node --id node2 --host storage-node-2 --port 5556 --storage-path /data_blocks
+    command: python -m src.storage.integrity_node --id node2 --host storage-node-2 --port 5556 --storage-path /data_blocks   
     depends_on:
       - zookeeper
     environment:
