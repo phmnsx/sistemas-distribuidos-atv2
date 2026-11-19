@@ -50,9 +50,32 @@ services:
       DB_PASSWORD: postgre
       SUSPECT_AFTER_S: "86400"
       DEAD_AFTER_S: "172800"
-      MAX_DISK_USAGE: "1.0"
+      MAX_DISK_USAGE: "0.9"
     ports:
       - "5000:5000"
+
+  controller2:
+    build: .
+    container_name: dfs-controller-2
+    profiles: ["ha"]
+    command: python -m src.controller.controller_server
+    depends_on:
+      postgres:
+        condition: service_healthy
+      zookeeper:
+        condition: service_started
+    environment:
+      ZK_HOSTS: zookeeper:2181
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: dfs_metadata
+      DB_USER: postgre
+      DB_PASSWORD: postgre
+      SUSPECT_AFTER_S: "86400"
+      DEAD_AFTER_S: "172800"
+      MAX_DISK_USAGE: "0.9"
+    ports:
+      - "5001:5000"
 
   storage-node-1:
     build: .
@@ -95,6 +118,34 @@ services:
       - ./data/node3:/data_blocks:Z
     ports:
       - "5557:5557"
+
+  storage-node-4:
+    build: .
+    container_name: dfs-storage-4
+    user: "0:0"
+    command: python -m src.storage.integrity_node --id node4 --host storage-node-4 --port 5558 --storage-path /data_blocks
+    depends_on:
+      - zookeeper
+    environment:
+      ZK_HOSTS: zookeeper:2181
+    volumes:
+      - ./data/node4:/data_blocks:Z
+    ports:
+      - "5558:5558"
+
+  storage-node-5:
+    build: .
+    container_name: dfs-storage-5
+    user: "0:0"
+    command: python -m src.storage.integrity_node --id node5 --host storage-node-5 --port 5559 --storage-path /data_blocks
+    depends_on:
+      - zookeeper
+    environment:
+      ZK_HOSTS: zookeeper:2181
+    volumes:
+      - ./data/node5:/data_blocks:Z
+    ports:
+      - "5559:5559"
 
 volumes:
   pg_data:
